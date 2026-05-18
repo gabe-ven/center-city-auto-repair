@@ -1,0 +1,360 @@
+/* ============================================================
+   CENTER CITY AUTOMOTIVE — Auto-shop design system
+   Black, cyan, white. Bold condensed signage. Real garage feel.
+   ============================================================ */
+
+:root {
+  /* Surfaces */
+  --bg: #ffffff;
+  --bg-2: #f3f4f5;          /* concrete-floor gray, very light */
+  --bg-3: #e7e9ec;          /* edge tone */
+  --ink: #0a0a0a;            /* deep shop black */
+  --ink-2: #161616;
+  --ink-3: #383838;
+  --ink-mute: #6b6b6b;
+  --line: #d8dade;
+
+  /* Legacy aliases (so existing layouts inherit the new palette) */
+  --paper: var(--bg);
+  --paper-2: var(--bg-2);
+  --paper-3: var(--bg-3);
+  --oxblood: var(--cyan-2);
+  --oxblood-2: var(--cyan);
+  --olive: var(--cyan-2);
+  --amber: var(--red);
+  --rule-light: #ffffff18;
+
+  /* Brand */
+  --cyan: #27bcd9;           /* signage cyan from logo */
+  --cyan-2: #1aa5c2;
+  --cyan-3: #d9f1f7;         /* tinted backdrop */
+  --red: #d8423a;            /* star red */
+  --red-2: #b6342d;
+
+  /* Lines on dark/light */
+  --rule:   #0a0a0a14;
+  --rule-strong: #0a0a0a40;
+  --rule-dark: #ffffff18;
+  --rule-dark-strong: #ffffff35;
+
+  /* Type — auto-shop signage */
+  --display: "Anton", "Oswald", "Arial Narrow", sans-serif;
+  --display-tight: "Barlow Condensed", "Oswald", sans-serif;
+  --sans: "Barlow", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --script: "Yellowtail", "Brush Script MT", cursive;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: #1a1a1a;
+}
+
+/* ---------- Artboard base ---------- */
+.shop {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 400;
+}
+
+.shop h1, .shop h2, .shop h3, .shop h4 {
+  font-family: var(--display-tight);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  margin: 0;
+  line-height: 1.1;
+}
+.shop h3, .shop h4 {
+  font-family: var(--sans);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.shop .mono, .shop .label, .shop .tag, .shop .tnum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.shop .label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+.shop .rule { height: 1px; background: var(--rule-strong); width: 100%; }
+.shop hr { border: 0; border-top: 1px solid var(--rule-strong); margin: 0; }
+
+/* "Marker" highlight word (replaces editorial italic serif) */
+.shop .mark {
+  color: var(--cyan-2);
+  position: relative;
+  display: inline-block;
+}
+.shop .mark-red { color: var(--red); }
+.shop .mark-cyan-bg {
+  background: var(--cyan);
+  color: var(--ink);
+  padding: 0 0.18em;
+  display: inline-block;
+}
+
+/* Diagonal warning tape divider */
+.shop .tape {
+  height: 22px;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--cyan) 0 16px,
+    var(--ink) 16px 32px
+  );
+}
+.shop .tape-thin {
+  height: 8px;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--cyan) 0 10px,
+    var(--ink) 10px 20px
+  );
+}
+
+/* ---------- Buttons ---------- */
+.shop .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  border: 2px solid transparent;
+  cursor: pointer;
+  line-height: 1;
+  transition: background .15s, color .15s;
+}
+.shop .btn-primary {
+  background: var(--cyan);
+  color: #fff;
+  border-color: var(--cyan);
+}
+.shop .btn-primary:hover { background: var(--cyan-2); border-color: var(--cyan-2); }
+.shop .btn-dark {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.shop .btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: #c0c4ca;
+}
+.shop .btn-ghost:hover { border-color: var(--ink); }
+.shop .btn-ghost-light {
+  background: transparent;
+  color: #fff;
+  border-color: #ffffff50;
+}
+.shop .btn-link {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cyan-2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--cyan);
+  padding-bottom: 1px;
+}
+
+/* ---------- Placeholders / imagery ---------- */
+.ph {
+  position: relative;
+  background:
+    repeating-linear-gradient(135deg,
+      #c5cad1 0 2px, transparent 2px 14px),
+    linear-gradient(180deg, #d6dade 0%, #b8bdc4 100%);
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.ph::after {
+  content: attr(data-label);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #2d3138;
+  background: rgba(255,255,255,0.78);
+  padding: 6px 10px;
+}
+
+.ph-dark {
+  background:
+    repeating-linear-gradient(135deg,
+      #1d1d1d 0 2px, transparent 2px 14px),
+    linear-gradient(180deg, #161616 0%, #0a0a0a 100%);
+}
+.ph-dark::after { color: #a5a5a5; background: rgba(0,0,0,0.65); }
+
+.ratio-4x3 { aspect-ratio: 4/3; }
+.ratio-3x2 { aspect-ratio: 3/2; }
+.ratio-16x10 { aspect-ratio: 16/10; }
+.ratio-1x1 { aspect-ratio: 1/1; }
+.ratio-5x7 { aspect-ratio: 5/7; }
+
+/* ---------- Brand mark (image-based) ---------- */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.brand img {
+  width: 56px;
+  height: 56px;
+  display: block;
+}
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.brand-name strong {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.brand-name small {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-top: 4px;
+}
+
+/* ---------- Chips / labels ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--cyan-3);
+  border-radius: 1px;
+  font-weight: 500;
+}
+.chip-dot::before {
+  content: "";
+  width: 7px; height: 7px;
+  background: var(--cyan-2);
+  border-radius: 50%;
+}
+.chip-cyan { background: var(--cyan); color: var(--ink); }
+.chip-dark { background: var(--ink); color: #fff; }
+.chip-red  { background: var(--red); color: #fff; }
+
+/* ---------- Kicker / overline ---------- */
+.kicker {
+  font-family: var(--display-tight);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.kicker::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: var(--cyan);
+  display: inline-block;
+}
+
+.number-stamp {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.bay-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--ink);
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 1px;
+}
+.bay-tag::before {
+  content: "";
+  width: 8px; height: 8px;
+  background: var(--cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #27bcd930;
+}
+
+/* Section number plate */
+.plate {
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.plate > span:first-child {
+  background: var(--ink);
+  color: var(--cyan);
+  padding: 6px 10px;
+}
+.plate > span:last-child {
+  color: var(--ink);
+  padding: 6px 12px;
+}
+
+.shop .ic {
+  width: 16px; height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  flex-shrink: 0;
+}
+
+/* Star icon — uses real red for accents */
+.star-red { color: var(--red); }
