@@ -8,21 +8,20 @@ import { btnFilledGold, btnOutlineNavy, inputStyle, wizardLead, modalBodyStyle, 
 
 type Flow = 'choose' | 'oil-lookup' | 'oil-active' | 'oil-ready' | 'repair-lookup' | 'repair-loading' | 'repair-status' | 'repair-notfound';
 
-const STATUS_ORDER = ['received', 'reviewing', 'in_repair', 'ready', 'completed'] as const;
-type TicketStatus = typeof STATUS_ORDER[number];
+const STATUS_ORDER = ['new', 'reviewing', 'in_repair', 'ready', 'completed'] as const;
 
-interface TrackResult {
-  id: string;
-  status: TicketStatus;
-  year: string;
-  make: string;
-  model: string;
-  licensePlate: string | null;
-  issues: string[];
-  assignedTo: string | null;
-  appointmentDate: string | null;
-  appointmentTime: string | null;
-  customerName: string;
+const STATUS_MAP: Record<string, { label: string; icon: string }> = {
+  new:        { label: "Received — we'll be in touch soon",            icon: 'inbox' },
+  reviewing:  { label: "Under Review — our mechanic is looking at it", icon: 'clipboard-list' },
+  in_repair:  { label: "In Progress — your car is being worked on",    icon: 'wrench' },
+  ready:      { label: "Ready for Pickup!",                            icon: 'badge-check' },
+  completed:  { label: "Completed",                                    icon: 'check-circle' },
+};
+
+interface TicketResult {
+  ticket_number: string;
+  status: string;
+  notes?: string;
 }
 
 const STAGES = [
@@ -36,30 +35,38 @@ const STAGES = [
 export default function TrackMyCarModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [flow, setFlow] = useState<Flow>('choose');
   const [oilLookup, setOilLookup] = useState({ plate: '', phone: '' });
-  const [repairLookup, setRepairLookup] = useState({ ticketId: '', contact: '' });
-  const [repairResult, setRepairResult] = useState<TrackResult | null>(null);
-  const [remaining, setRemaining] = useState(38 * 60 + 22);
-  const [demoState, setDemoState] = useState('active');
+  const [repairLookup, setRepairLookup] = useState({ ticket: '', phone: '' });
+  const [ticketResult, setTicketResult] = useState<TicketResult | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(45 * 60);
+  const [adjustmentMins, setAdjustmentMins] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [repairError, setRepairError] = useState('');
 
   useEffect(() => {
     if (!open) {
       const t = setTimeout(() => {
         setFlow('choose');
         setOilLookup({ plate: '', phone: '' });
-        setRepairLookup({ ticketId: '', contact: '' });
-        setRepairResult(null);
-        setRemaining(38 * 60 + 22);
-        setDemoState('active');
+        setRepairLookup({ ticket: '', phone: '' });
+        setTicketResult(null);
+        setRemaining(0);
+        setTotalSeconds(45 * 60);
+        setAdjustmentMins(0);
+        setLoading(false);
+        setLookupError('');
+        setRepairError('');
       }, 250);
       return () => clearTimeout(t);
     }
   }, [open]);
 
   useEffect(() => {
-    if (flow !== 'oil-active' || demoState === 'ready') return;
+    if (flow !== 'oil-active') return;
     const id = setInterval(() => setRemaining(r => Math.max(0, r - 1)), 1000);
     return () => clearInterval(id);
-  }, [flow, demoState]);
+  }, [flow]);
 
   const goBack = () => {
     if (flow === 'oil-lookup' || flow === 'repair-lookup') setFlow('choose');
@@ -68,22 +75,58 @@ export default function TrackMyCarModal({ open, onClose }: { open: boolean; onCl
     else if (flow === 'repair-loading') setFlow('repair-lookup');
   };
 
-  const handleRepairLookup = async () => {
-    if (!repairLookup.ticketId.trim() || !repairLookup.contact.trim()) return;
-    setFlow('repair-loading');
+  const handleOilLookup = async () => {
+    setLoading(true); setLookupError('');
     try {
-      const res = await fetch('/api/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId: repairLookup.ticketId.trim(), contact: repairLookup.contact.trim() }),
-      });
-      const data = await res.json();
-      if (data.found) {
-        setRepairResult(data.ticket);
-        setFlow('repair-status');
-      } else {
-        setFlow('repair-notfound');
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_DASHBOARD_API_URL}/api/oil-changes/track`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shop_id:       process.env.NEXT_PUBLIC_SHOP_ID,
+            license_plate: oilLookup.plate,
+            phone:         oilLookup.phone,
+          }),
+        }
+      );
+      if (res.status === 404) {
+        setLookupError("We couldn't find a matching oil change. Please check your plate and phone number.");
+        setLoading(false); return;
       }
+      const json = await res.json();
+      const record = json.data ?? json;
+      if (record.status === 'ready') { setFlow('oil-ready'); setLoading(false); return; }
+      const eta   = new Date(record.started_at).getTime()
+                  + (record.estimated_minutes + record.adjustment_minutes) * 60000;
+      const secs  = Math.max(0, Math.floor((eta - Date.now()) / 1000));
+      const total = (record.estimated_minutes + record.adjustment_minutes) * 60;
+      setRemaining(secs);
+      setTotalSeconds(total > 0 ? total : 45 * 60);
+      setAdjustmentMins(record.adjustment_minutes ?? 0);
+      setFlow('oil-active');
+    } catch {
+      setLookupError('Something went wrong. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const handleRepairLookup = async () => {
+    if (!repairLookup.ticket.trim() || !repairLookup.phone.trim()) return;
+    setFlow('repair-loading'); setRepairError('');
+    try {
+      const params = new URLSearchParams({
+        ticket_number: repairLookup.ticket.trim().toUpperCase(),
+        phone:         repairLookup.phone.trim(),
+        shop_id:       process.env.NEXT_PUBLIC_SHOP_ID ?? '',
+      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_DASHBOARD_API_URL}/api/tickets/status?${params}`
+      );
+      if (res.status === 404) { setFlow('repair-notfound'); return; }
+      const json = await res.json();
+      setTicketResult(json.data ?? json);
+      setFlow('repair-status');
     } catch {
       setFlow('repair-notfound');
     }
@@ -159,14 +202,12 @@ export default function TrackMyCarModal({ open, onClose }: { open: boolean; onCl
                   style={inputStyle} />
               </Field>
             </div>
-            <div style={{ marginTop: 22, padding: '12px 14px', background: '#F5F5F5', border: '1px dashed #D8CFBC', borderRadius: 4, fontFamily: 'Inter,sans-serif', fontSize: 12.5, color: '#666666', lineHeight: 1.5 }}>
-              <strong style={{ color: '#111111' }}>Demo:</strong> Click "Find My Car" with anything — the next screens show a live-updating countdown timer.
-            </div>
+            {lookupError && <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13.5, color: '#B23A3A', marginTop: 12 }}>{lookupError}</p>}
           </div>
           <div style={modalFooterStyle}>
             <span />
-            <button onClick={() => setFlow('oil-active')} style={{ ...btnFilledGold, padding: '12px 22px', fontSize: 13 }}>
-              Find My Car <ArrowRight size={14} style={{ marginLeft: 8, verticalAlign: '-2px' }} />
+            <button onClick={handleOilLookup} disabled={loading} style={{ ...btnFilledGold, padding: '12px 22px', fontSize: 13, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {loading ? 'Looking up…' : (<>Find My Car <ArrowRight size={14} style={{ marginLeft: 8, verticalAlign: '-2px' }} /></>)}
             </button>
           </div>
         </>
@@ -187,24 +228,15 @@ export default function TrackMyCarModal({ open, onClose }: { open: boolean; onCl
               </div>
             </div>
 
-            <CountdownRing seconds={remaining} totalSeconds={45 * 60} />
+            <CountdownRing seconds={remaining} totalSeconds={totalSeconds} />
 
             <div style={{ textAlign: 'center', marginTop: 22, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 600, color: '#111111', letterSpacing: '0.16em', textTransform: 'uppercase' }}>
               <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#29B9E7', marginRight: 10, verticalAlign: '2px', animation: 'pulse-dot 1.6s infinite' }} />
               Your car is being serviced
             </div>
 
-            {demoState === 'early' && <div style={adjustmentNote('#1F7A47')}>⏱ Your car will be ready 10 mins early.</div>}
-            {demoState === 'delayed' && <div style={adjustmentNote('#B23A3A')}>⚠️ Delayed by 20 mins — we'll text you when ready.</div>}
-
-            <div style={{ marginTop: 22, padding: '12px 14px', background: '#F8F8F8', border: '1px dashed #D8CFBC', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#666666' }}>
-              <span>Demo state:</span>
-              <div style={{ display: 'inline-flex', gap: 6 }}>
-                {[{ id: 'active', label: 'Active' }, { id: 'early', label: 'Early' }, { id: 'delayed', label: 'Delayed' }, { id: 'ready', label: 'Ready' }].map(s => (
-                  <button key={s.id} onClick={() => { if (s.id === 'ready') setFlow('oil-ready'); else setDemoState(s.id); }} style={{ padding: '6px 12px', background: demoState === s.id ? '#111111' : '#FFFFFF', color: demoState === s.id ? '#29B9E7' : '#111111', border: '1px solid #E5E5E5', borderRadius: 3, cursor: 'pointer', fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{s.label}</button>
-                ))}
-              </div>
-            </div>
+            {adjustmentMins < 0 && <div style={adjustmentNote('#1F7A47')}>⏱ Your car will be ready {Math.abs(adjustmentMins)} mins early.</div>}
+            {adjustmentMins > 0 && <div style={adjustmentNote('#B23A3A')}>⚠️ Delayed by {adjustmentMins} mins — we'll text you when ready.</div>}
 
             <ShopCard />
           </div>
@@ -234,31 +266,32 @@ export default function TrackMyCarModal({ open, onClose }: { open: boolean; onCl
       {flow === 'repair-lookup' && (
         <>
           <div style={modalBodyStyle}>
-            <p style={wizardLead}>Enter your ticket ID and email or phone to pull up your repair status.</p>
+            <p style={wizardLead}>Enter your ticket number and phone to pull up your repair status.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
-              <Field label="Ticket ID" full>
-                <input type="text" placeholder="e.g. CCAR-1748000000000"
-                  value={repairLookup.ticketId}
-                  onChange={e => setRepairLookup({ ...repairLookup, ticketId: e.target.value })}
+              <Field label="Ticket Number" full>
+                <input type="text" placeholder="CCA-XXXXXXXXXX"
+                  value={repairLookup.ticket}
+                  onChange={e => setRepairLookup({ ...repairLookup, ticket: e.target.value.toUpperCase() })}
                   style={{ ...inputStyle, letterSpacing: '0.08em', fontFamily: 'ui-monospace,monospace', fontWeight: 600 }} />
               </Field>
-              <Field label="Email or last 7 digits of phone" full>
-                <input type="text" placeholder="you@email.com or 580-0204"
-                  value={repairLookup.contact}
-                  onChange={e => setRepairLookup({ ...repairLookup, contact: e.target.value })}
+              <Field label="Phone (verification)" full>
+                <input type="tel" placeholder="(530) 555-0100"
+                  value={repairLookup.phone}
+                  onChange={e => setRepairLookup({ ...repairLookup, phone: e.target.value })}
                   style={inputStyle} />
               </Field>
             </div>
+            {repairError && <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13.5, color: '#B23A3A', marginTop: 12 }}>{repairError}</p>}
             <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 12.5, color: '#666666', marginTop: 14, lineHeight: 1.5 }}>
-              Your ticket ID was emailed when you booked. Contact us at <a href="tel:5307580204" style={{ color: '#29B9E7' }}>(530) 758-0204</a> if you need help finding it.
+              Your ticket number was emailed when you booked. Contact us at <a href="tel:5307580204" style={{ color: '#29B9E7' }}>(530) 758-0204</a> if you need help finding it.
             </p>
           </div>
           <div style={modalFooterStyle}>
             <span />
             <button
               onClick={handleRepairLookup}
-              disabled={!repairLookup.ticketId.trim() || !repairLookup.contact.trim()}
-              style={{ ...btnFilledGold, padding: '12px 22px', fontSize: 13, opacity: (!repairLookup.ticketId.trim() || !repairLookup.contact.trim()) ? 0.5 : 1, cursor: (!repairLookup.ticketId.trim() || !repairLookup.contact.trim()) ? 'not-allowed' : 'pointer' }}>
+              disabled={!repairLookup.ticket.trim() || !repairLookup.phone.trim()}
+              style={{ ...btnFilledGold, padding: '12px 22px', fontSize: 13, opacity: (!repairLookup.ticket.trim() || !repairLookup.phone.trim()) ? 0.5 : 1, cursor: (!repairLookup.ticket.trim() || !repairLookup.phone.trim()) ? 'not-allowed' : 'pointer' }}>
               Find My Ticket <ArrowRight size={14} style={{ marginLeft: 8, verticalAlign: '-2px' }} />
             </button>
           </div>
@@ -294,34 +327,27 @@ export default function TrackMyCarModal({ open, onClose }: { open: boolean; onCl
       )}
 
       {/* REPAIR STATUS */}
-      {flow === 'repair-status' && repairResult && (
-        <RepairStatusView ticket={repairResult} />
+      {flow === 'repair-status' && ticketResult && (
+        <RepairStatusView ticket={ticketResult} />
       )}
     </ModalShell>
   );
 }
 
-function RepairStatusView({ ticket }: { ticket: TrackResult }) {
-  const stageIdx = STATUS_ORDER.indexOf(ticket.status);
-  const active = STAGES[stageIdx] ?? STAGES[0];
-  const progressPct = stageIdx / (STAGES.length - 1);
+function RepairStatusView({ ticket }: { ticket: TicketResult }) {
+  const stageIdx = STATUS_ORDER.indexOf(ticket.status as typeof STATUS_ORDER[number]);
+  const activeIdx = stageIdx >= 0 ? stageIdx : 0;
+  const progressPct = activeIdx / (STAGES.length - 1);
+  const statusEntry = STATUS_MAP[ticket.status] ?? { label: ticket.status, icon: 'wrench' };
 
   return (
     <div style={modalBodyStyle}>
-      {/* Vehicle header */}
+      {/* Ticket header */}
       <div style={{ padding: '14px 16px', background: '#F5F5F5', border: '1px solid #E5E5E5', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
         <Car size={22} style={{ color: '#29B9E7' }} />
         <div>
-          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 600, color: '#29B9E7', letterSpacing: '0.22em', textTransform: 'uppercase' }}>
-            {ticket.id}
-          </div>
-          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, fontSize: 17, color: '#111111', marginTop: 2 }}>
-            {ticket.year} {ticket.make} {ticket.model}
-            {ticket.licensePlate && <> · <span style={{ fontFamily: 'ui-monospace,monospace', fontWeight: 600 }}>{ticket.licensePlate}</span></>}
-          </div>
-          {ticket.customerName && (
-            <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, color: '#666666', marginTop: 2 }}>{ticket.customerName}</div>
-          )}
+          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 600, color: '#29B9E7', letterSpacing: '0.22em', textTransform: 'uppercase' }}>Ticket Number</div>
+          <div style={{ fontFamily: 'ui-monospace,monospace', fontWeight: 700, fontSize: 15, color: '#111111', marginTop: 2 }}>{ticket.ticket_number}</div>
         </div>
       </div>
 
@@ -331,8 +357,8 @@ function RepairStatusView({ ticket }: { ticket: TrackResult }) {
         <div style={{ position: 'absolute', left: 24, top: 24, height: 3, background: '#29B9E7', borderRadius: 2, zIndex: 1, width: `calc(${progressPct * 100}% * (1 - 48px / 100%))`, maxWidth: 'calc(100% - 48px)', transition: 'width 400ms ease' }} />
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between' }}>
           {STAGES.map((s, i) => {
-            const passed = i < stageIdx;
-            const isActive = i === stageIdx;
+            const passed = i < activeIdx;
+            const isActive = i === activeIdx;
             return (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                 <div style={{ width: 50, height: 50, borderRadius: '50%', background: passed || isActive ? '#29B9E7' : '#FFFFFF', border: `2px solid ${passed || isActive ? '#29B9E7' : '#E5E5E5'}`, color: passed || isActive ? '#111111' : '#AAAAAA', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 280ms', boxShadow: isActive ? '0 0 0 6px rgba(41,185,231,0.2)' : 'none' }}>
@@ -345,20 +371,19 @@ function RepairStatusView({ ticket }: { ticket: TrackResult }) {
         </div>
       </div>
 
-      {/* Status message */}
+      {/* Status card */}
       <div style={{ background: '#111111', color: '#F5F5F5', borderRadius: 8, padding: '20px 22px', display: 'flex', gap: 14, alignItems: 'flex-start', borderLeft: '4px solid #29B9E7' }}>
-        <DynamicIcon name={active.icon} size={22} style={{ color: '#29B9E7', flexShrink: 0, marginTop: 2 }} />
+        <DynamicIcon name={statusEntry.icon} size={22} style={{ color: '#29B9E7', flexShrink: 0, marginTop: 2 }} />
         <div>
           <div style={{ fontFamily: "'Barlow Condensed',sans-serif", color: '#29B9E7', fontSize: 11, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', marginBottom: 6 }}>Status update</div>
-          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 15, lineHeight: 1.55, color: '#F5F5F5' }}>{active.msg}</div>
+          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 15, lineHeight: 1.55, color: '#F5F5F5' }}>{statusEntry.label}</div>
         </div>
       </div>
 
-      {/* Appointment info */}
-      {(ticket.appointmentDate || ticket.appointmentTime) && (
-        <div style={{ marginTop: 14, padding: '12px 16px', background: '#F5F5F5', border: '1px solid #E5E5E5', borderRadius: 6, fontFamily: 'Inter,sans-serif', fontSize: 13.5, color: '#333333' }}>
-          <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#29B9E7', marginRight: 8 }}>Appointment</span>
-          {ticket.appointmentDate}{ticket.appointmentDate && ticket.appointmentTime ? ' · ' : ''}{ticket.appointmentTime}
+      {/* Shop note */}
+      {ticket.notes && (
+        <div style={{ marginTop: 14, padding: '12px 16px', background: '#FFFBEA', border: '1px solid #F0D875', borderLeft: '4px solid #D4A017', borderRadius: 6, fontFamily: 'Inter,sans-serif', fontSize: 13.5, color: '#333333', lineHeight: 1.5 }}>
+          {ticket.notes}
         </div>
       )}
 

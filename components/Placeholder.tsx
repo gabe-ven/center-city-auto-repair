@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 
 // Striped SVG placeholder with monospace label.
 // Drop a real image into the indicated path and the <img> fallback path renders it instead.
@@ -16,7 +16,8 @@ export default function Placeholder({ label, w = 800, h = 600, tone = 'warm', sr
     dark:  { bg: '#1A1A1A', fg: '#C9A84C', text: '#F5F0E8' },
   };
   const t = tones[tone] || tones.warm;
-  const id = `stripe-${Math.random().toString(36).slice(2, 8)}`;
+  const uid = useId();
+  const id = `stripe-${uid.replace(/:/g, '')}`;
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid slice"
